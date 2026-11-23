@@ -8,11 +8,11 @@ import hashlib
 import hmac
 import urllib.request
 import urllib.error
+import threading
 
 PORT = int(os.environ.get("PORT", 3000))
 PUBLIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "public")
 
-# Senha / PIN de segurança (Padrão: 1234 - personalizável via variável de ambiente APP_PIN)
 APP_PIN = os.environ.get("APP_PIN", "1234")
 AUTH_TOKEN = hashlib.sha256(f"benedito_auth_{APP_PIN}".encode('utf-8')).hexdigest()
 
@@ -41,8 +41,10 @@ DEVICES = [
         "type": "climate",
         "icon": "♨️",
         "online": True,
-        "state": True,
+        "state": False,
         "temp": 30,
+        "temp_current": 25,
+        "mode": "eco",
         "group": "utility"
     },
     {
@@ -63,7 +65,7 @@ DEVICES = [
         "categoryLabel": "Iluminação Gramado",
         "type": "light",
         "icon": "🌱",
-        "online": True,
+        "online": False,
         "state": False,
         "group": "utility"
     },
@@ -74,7 +76,7 @@ DEVICES = [
         "categoryLabel": "Iluminação",
         "type": "light",
         "icon": "🍳",
-        "online": True,
+        "online": False,
         "state": False,
         "group": "living"
     },
@@ -85,7 +87,7 @@ DEVICES = [
         "categoryLabel": "Iluminação",
         "type": "light",
         "icon": "🛏️",
-        "online": True,
+        "online": False,
         "state": False,
         "group": "living"
     },
@@ -96,7 +98,7 @@ DEVICES = [
         "categoryLabel": "Interruptor Muro",
         "type": "light",
         "icon": "🧱",
-        "online": True,
+        "online": False,
         "state": False,
         "group": "access"
     },
@@ -107,7 +109,7 @@ DEVICES = [
         "categoryLabel": "Bomba d'Água",
         "type": "switch",
         "icon": "💧",
-        "online": True,
+        "online": False,
         "state": False,
         "group": "utility"
     },
@@ -118,7 +120,7 @@ DEVICES = [
         "categoryLabel": "Interruptor Auxiliar",
         "type": "switch",
         "icon": "⚡",
-        "online": True,
+        "online": False,
         "state": False,
         "group": "utility"
     }
@@ -156,19 +158,22 @@ def get_tuya_token():
             token_cache["expire_at"] = now + expire - 60
             return token
     except Exception as e:
+        print("[Tuya Token Error]:", e)
         return None
 
-def send_tuya_command(device_id, code, value):
+def tuya_api_call(method, url_path, body=None):
     token = get_tuya_token()
     if not token:
-        return False
+        return None
     t = str(int(time.time() * 1000))
-    url_path = f"/v1.0/devices/{device_id}/commands"
-    method = "POST"
-    body = {"commands": [{"code": code, "value": value}]}
-    body_bytes = json.dumps(body).encode('utf-8')
-    body_hash = hashlib.sha256(body_bytes).hexdigest()
     
+    if body is not None:
+        body_bytes = json.dumps(body).encode('utf-8')
+        body_hash = hashlib.sha256(body_bytes).hexdigest()
+    else:
+        body_bytes = None
+        body_hash = hashlib.sha256(b"").hexdigest()
+        
     string_to_sign = f"{method}\n{body_hash}\n\n{url_path}"
     sign_str = ACCESS_ID + token + t + string_to_sign
     sign = hmac.new(ACCESS_SECRET.encode('utf-8'), sign_str.encode('utf-8'), hashlib.sha256).hexdigest().upper()
@@ -185,10 +190,52 @@ def send_tuya_command(device_id, code, value):
     req = urllib.request.Request(ENDPOINT + url_path, data=body_bytes, headers=headers, method=method)
     try:
         with urllib.request.urlopen(req, timeout=5) as resp:
-            res = json.loads(resp.read().decode('utf-8'))
-            return res.get("success", False)
+            return json.loads(resp.read().decode('utf-8'))
     except Exception as e:
-        return False
+        return None
+
+def sync_live_device_statuses():
+    """Consulta o status real dos dispositivos na Tuya Cloud e atualiza os estados locais"""
+    for dev in DEVICES:
+        dev_id = dev["id"]
+        res = tuya_api_call("GET", f"/v1.0/devices/{dev_id}/status")
+        if res and res.get("success"):
+            dps = {dp["code"]: dp["value"] for dp in res.get("result", [])}
+            
+            # Heat Pump1
+            if dev["type"] == "climate":
+                if "switch" in dps:
+                    dev["state"] = bool(dps["switch"])
+                if "temp_set" in dps:
+                    dev["temp"] = int(dps["temp_set"])
+                if "temp_current" in dps:
+                    dev["temp_current"] = int(dps["temp_current"])
+                if "mode" in dps:
+                    dev["mode"] = str(dps["mode"])
+            else:
+                # Interruptores (switch_1 ou switch)
+                if "switch_1" in dps:
+                    dev["state"] = bool(dps["switch_1"])
+                elif "switch" in dps:
+                    dev["state"] = bool(dps["switch"])
+
+def background_tuya_poller():
+    while True:
+        try:
+            sync_live_device_statuses()
+        except Exception as e:
+            pass
+        time.sleep(6)
+
+# Inicia sincronização em segundo plano
+threading.Thread(target=background_tuya_poller, daemon=True).start()
+
+def send_tuya_command(device_id, code, value):
+    body = {"commands": [{"code": code, "value": value}]}
+    res = tuya_api_call("POST", f"/v1.0/devices/{device_id}/commands", body)
+    if res and res.get("success"):
+        return True
+    return False
 
 class DashboardRequestHandler(http.server.SimpleHTTPRequestHandler):
     def is_authorized(self):
@@ -238,10 +285,8 @@ class DashboardRequestHandler(http.server.SimpleHTTPRequestHandler):
         except:
             body = {}
 
-        # Endpoint de Autenticação / PIN
         if self.path == "/api/auth":
             pin = body.get("pin", "")
-            print(f"[AUTH ATTEMPT] Received body: {body}, pin: {repr(pin)}, APP_PIN: {repr(APP_PIN)}")
             authenticated = (str(pin).strip() == str(APP_PIN).strip())
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -254,7 +299,6 @@ class DashboardRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps(resp_body).encode('utf-8'))
             return
 
-        # Todos os outros POSTs exigem autenticação
         if not self.is_authorized():
             self.send_response(401)
             self.send_header("Content-Type", "application/json")
@@ -268,7 +312,7 @@ class DashboardRequestHandler(http.server.SimpleHTTPRequestHandler):
             dev = next((d for d in DEVICES if d["id"] == dev_id), None)
             if dev:
                 dev["state"] = not dev["state"]
-                cmd_code = "switch_1" if dev["type"] == "light" else "switch"
+                cmd_code = "switch" if dev["type"] == "climate" else "switch_1"
                 send_tuya_command(dev_id, cmd_code, dev["state"])
 
                 self.send_response(200)
@@ -296,7 +340,8 @@ class DashboardRequestHandler(http.server.SimpleHTTPRequestHandler):
             for d in DEVICES:
                 if d["type"] != "gate":
                     d["state"] = False
-                    send_tuya_command(d["id"], "switch_1" if d["type"] == "light" else "switch", False)
+                    cmd_code = "switch" if d["type"] == "climate" else "switch_1"
+                    send_tuya_command(d["id"], cmd_code, False)
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Access-Control-Allow-Origin", "*")
@@ -309,5 +354,5 @@ class DashboardRequestHandler(http.server.SimpleHTTPRequestHandler):
 if __name__ == "__main__":
     socketserver.TCPServer.allow_reuse_address = True
     with socketserver.TCPServer(("0.0.0.0", PORT), DashboardRequestHandler) as httpd:
-        print(f"🔒 DASHBOARD PROTEGIDO COM PIN RODANDO NA PORTA {PORT}")
+        print(f"🔒 DASHBOARD CASA BENEDITO RODANDO NA PORTA {PORT}")
         httpd.serve_forever()

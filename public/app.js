@@ -170,6 +170,10 @@ function renderDevices() {
     let controlsHtml = '';
     if (dev.type === 'climate') {
       controlsHtml = `
+        <div class="climate-info-row">
+          <span class="badge-sub">Atual: <strong>${dev.temp_current || 25}°C</strong></span>
+          <span class="badge-sub">Modo: <strong>${(dev.mode || 'eco').toUpperCase()}</strong></span>
+        </div>
         <div class="heatpump-controls">
           <button class="temp-btn" onclick="adjustTemp('${dev.id}', -1)">-</button>
           <span class="temp-val">${dev.temp || 30}°C</span>
@@ -212,7 +216,7 @@ async function toggleDevice(id) {
   renderDevices();
   updateQuickActionStates();
 
-  showToast(`${dev.name}: ${dev.state ? 'Ligado' : 'Desligado'}`);
+  showToast(`${dev.name}: ${dev.state ? 'Ligando...' : 'Desligando...'}`);
 
   try {
     const res = await fetch(`/api/device/${id}/toggle`, {
@@ -238,7 +242,7 @@ async function adjustTemp(id, delta) {
 
   dev.temp = (dev.temp || 30) + delta;
   renderDevices();
-  showToast(`${dev.name}: ${dev.temp}°C`);
+  showToast(`${dev.name}: Alvo ajustado para ${dev.temp}°C`);
 
   try {
     await fetch(`/api/device/${id}/set`, {
