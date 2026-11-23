@@ -20,7 +20,7 @@ ACCESS_ID = os.environ.get("TUYA_ACCESS_ID", "5jejpuygmpjse3vpc8ct")
 ACCESS_SECRET = os.environ.get("TUYA_ACCESS_SECRET", "4286596817f94549a81ac43dfdab1d08")
 ENDPOINT = "https://openapi.tuyaus.com"
 
-# Dispositivos Casa BENEDITO
+# Dispositivos Oficiais e Confirmados da Casa BENEDITO
 DEVICES = [
     {
         "id": "eb0c2bc123fe9329d5uzfi",
@@ -51,7 +51,7 @@ DEVICES = [
         "id": "ebeb785d97910cf4926gpa",
         "name": "Sala",
         "room": "Sala de Estar",
-        "categoryLabel": "Iluminação",
+        "categoryLabel": "Iluminação Sala",
         "type": "light",
         "icon": "💡",
         "online": True,
@@ -59,68 +59,24 @@ DEVICES = [
         "group": "living"
     },
     {
-        "id": "eb79a14ded479609e6oew1",
+        "id": "ebc229981c2ca6e9a12knx",
+        "name": "Cozinha",
+        "room": "Cozinha",
+        "categoryLabel": "Iluminação Cozinha",
+        "type": "light",
+        "icon": "🍳",
+        "online": True,
+        "state": False,
+        "group": "living"
+    },
+    {
+        "id": "eb74cc1d14a6118bb1udde",
         "name": "Gramado",
         "room": "Jardim & Área Externa",
         "categoryLabel": "Iluminação Gramado",
         "type": "light",
         "icon": "🌱",
-        "online": False,
-        "state": False,
-        "group": "utility"
-    },
-    {
-        "id": "ebd69334e2329acb42ueuq",
-        "name": "Cozinha",
-        "room": "Cozinha",
-        "categoryLabel": "Iluminação",
-        "type": "light",
-        "icon": "🍳",
-        "online": False,
-        "state": False,
-        "group": "living"
-    },
-    {
-        "id": "ebaa1acad41d62b7c6cyte",
-        "name": "Quarto",
-        "room": "Dormitório",
-        "categoryLabel": "Iluminação",
-        "type": "light",
-        "icon": "🛏️",
-        "online": False,
-        "state": False,
-        "group": "living"
-    },
-    {
-        "id": "eb5a0293865b098d5dxqvq",
-        "name": "Muro",
-        "room": "Perímetro",
-        "categoryLabel": "Interruptor Muro",
-        "type": "light",
-        "icon": "🧱",
-        "online": False,
-        "state": False,
-        "group": "access"
-    },
-    {
-        "id": "eb955ac00c7bed821fgyxw",
-        "name": "Poço",
-        "room": "Abastecimento",
-        "categoryLabel": "Bomba d'Água",
-        "type": "switch",
-        "icon": "💧",
-        "online": False,
-        "state": False,
-        "group": "utility"
-    },
-    {
-        "id": "ebe225d89f4d353dbdatue",
-        "name": "ZEFA",
-        "room": "Geral",
-        "categoryLabel": "Interruptor Auxiliar",
-        "type": "switch",
-        "icon": "⚡",
-        "online": False,
+        "online": True,
         "state": False,
         "group": "utility"
     }
@@ -158,7 +114,6 @@ def get_tuya_token():
             token_cache["expire_at"] = now + expire - 60
             return token
     except Exception as e:
-        print("[Tuya Token Error]:", e)
         return None
 
 def tuya_api_call(method, url_path, body=None):
@@ -195,11 +150,12 @@ def tuya_api_call(method, url_path, body=None):
         return None
 
 def sync_live_device_statuses():
-    """Consulta o status real dos dispositivos na Tuya Cloud e atualiza os estados locais"""
+    """Consulta o status em tempo real da Tuya Cloud"""
     for dev in DEVICES:
         dev_id = dev["id"]
         res = tuya_api_call("GET", f"/v1.0/devices/{dev_id}/status")
         if res and res.get("success"):
+            dev["online"] = True
             dps = {dp["code"]: dp["value"] for dp in res.get("result", [])}
             
             # Heat Pump1
@@ -223,11 +179,11 @@ def background_tuya_poller():
     while True:
         try:
             sync_live_device_statuses()
-        except Exception as e:
+        except:
             pass
-        time.sleep(6)
+        time.sleep(5)
 
-# Inicia sincronização em segundo plano
+# Thread de sincronização contínua com a Tuya Cloud
 threading.Thread(target=background_tuya_poller, daemon=True).start()
 
 def send_tuya_command(device_id, code, value):
