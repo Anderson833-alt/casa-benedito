@@ -79,6 +79,63 @@
       </div>
     </header>
 
+    <!-- 3D Interactive House Floorplan -->
+    <section class="house-3d-section">
+      <div class="house-3d-header">
+        <div class="section-label">PLANTA 3D INTERATIVA</div>
+        <div class="house-status-tag" id="houseStatusTag">
+          <span class="house-status-indicator" id="houseStatusDot"></span>
+          <span id="houseStatusText">Luzes Apagadas (Modo Cinza)</span>
+        </div>
+      </div>
+
+      <div class="house-3d-card" id="houseCard">
+        <div class="house-image-wrapper">
+          <!-- Imagem Cinza (Luzes apagadas) -->
+          <div class="house-img house-img-gray" id="imgHouseGray"></div>
+          <!-- Imagem Colorida (Luzes acesas) -->
+          <div class="house-img house-img-color" id="imgHouseColor"></div>
+          
+          <!-- Interactive Hotspot Pins -->
+          <div class="hotspot hotspot-sala" id="pinSala" onclick="event.stopPropagation(); toggleDevice('ebeb785d97910cf4926gpa')">
+            <span class="hotspot-pulse"></span>
+            <span class="hotspot-icon">💡</span>
+            <span class="hotspot-label">Sala</span>
+          </div>
+
+          <div class="hotspot hotspot-gramado" id="pinGramado" onclick="event.stopPropagation(); toggleDevice('eb74cc1d14a6118bb1udde')">
+            <span class="hotspot-pulse"></span>
+            <span class="hotspot-icon">🌱</span>
+            <span class="hotspot-label">Gramado</span>
+          </div>
+
+          <div class="hotspot hotspot-piscina" id="pinPiscina" onclick="event.stopPropagation(); toggleDevice('eba17a82c93dce8ff521ri')">
+            <span class="hotspot-pulse"></span>
+            <span class="hotspot-icon">♨️</span>
+            <span class="hotspot-label">Piscina</span>
+          </div>
+
+          <div class="hotspot hotspot-porteira" id="pinPorteira" onclick="event.stopPropagation(); triggerPorteiraPulse()">
+            <span class="hotspot-pulse"></span>
+            <span class="hotspot-icon">🚪</span>
+            <span class="hotspot-label">Porteira</span>
+          </div>
+
+          <!-- Floating Interactive Control Banner -->
+          <div class="house-floating-banner">
+            <div class="hfb-left">
+              <span class="hfb-title" id="hfbTitle">Iluminação da Casa</span>
+              <span class="hfb-sub" id="hfbSub">Toque para alternar entre Cinza e Colorido</span>
+            </div>
+            <button class="hfb-toggle-btn" id="btnHouseLightingToggle" onclick="toggleAllLighting()">
+              <span id="hfbBtnIcon">💡</span>
+              <span id="hfbBtnText">Ligar Luzes</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- Quick Action Bar -->
     <section class="quick-actions-bar">
       <div class="section-label">AÇÕES RÁPIDAS</div>
