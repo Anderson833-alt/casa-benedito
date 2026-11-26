@@ -128,6 +128,97 @@ function showToast(message) {
   }, 2500);
 }
 
+// Update 3D Interactive House Visual
+function updateHouseVisual() {
+  const houseCard = document.getElementById('houseCard');
+  if (!houseCard) return;
+
+  const houseStatusTag = document.getElementById('houseStatusTag');
+  const houseStatusText = document.getElementById('houseStatusText');
+  const hfbBtnText = document.getElementById('hfbBtnText');
+  const hfbBtnIcon = document.getElementById('hfbBtnIcon');
+
+  // Verifica se qualquer iluminação está acesa (Sala, Cozinha, Gramado, etc.)
+  const lightDevices = devices.filter(d => d.type === 'light');
+  const isAnyLightOn = lightDevices.some(d => d.state === true || d.state === 'on');
+
+  if (isAnyLightOn) {
+    houseCard.classList.add('lighting-on');
+    if (houseStatusTag) houseStatusTag.classList.add('active');
+    if (houseStatusText) houseStatusText.textContent = 'Luzes Acesas (Casa Colorida)';
+    if (hfbBtnText) hfbBtnText.textContent = 'Apagar Luzes';
+    if (hfbBtnIcon) hfbBtnIcon.textContent = '🌙';
+  } else {
+    houseCard.classList.remove('lighting-on');
+    if (houseStatusTag) houseStatusTag.classList.remove('active');
+    if (houseStatusText) houseStatusText.textContent = 'Luzes Apagadas (Modo Cinza)';
+    if (hfbBtnText) hfbBtnText.textContent = 'Ligar Luzes';
+    if (hfbBtnIcon) hfbBtnIcon.textContent = '💡';
+  }
+
+  // Atualiza estados dos Hotspots interativos sobre a imagem 3D
+  const sala = devices.find(d => d.name.toLowerCase().includes('sala'));
+  const pinSala = document.getElementById('pinSala');
+  if (pinSala && sala) {
+    pinSala.classList.toggle('active', !!sala.state);
+  }
+
+  const gramado = devices.find(d => d.name.toLowerCase().includes('gramado'));
+  const pinGramado = document.getElementById('pinGramado');
+  if (pinGramado && gramado) {
+    pinGramado.classList.toggle('active', !!gramado.state);
+  }
+
+  const heat = devices.find(d => d.name.toLowerCase().includes('heat'));
+  const pinPiscina = document.getElementById('pinPiscina');
+  if (pinPiscina && heat) {
+    pinPiscina.classList.toggle('active', !!heat.state);
+  }
+
+  const porteira = devices.find(d => d.name.toUpperCase().includes('PORTEIRA'));
+  const pinPorteira = document.getElementById('pinPorteira');
+  if (pinPorteira && porteira) {
+    pinPorteira.classList.toggle('active', !!porteira.state);
+  }
+}
+
+// Alternar toda a iluminação (Colorido <-> Cinza)
+async function toggleAllLighting() {
+  const token = localStorage.getItem('benedito_token');
+  const lightDevices = devices.filter(d => d.type === 'light');
+  const isAnyLightOn = lightDevices.some(d => d.state === true || d.state === 'on');
+  const targetState = !isAnyLightOn;
+
+  lightDevices.forEach(d => {
+    d.state = targetState;
+  });
+
+  renderDevices();
+  updateQuickActionStates();
+  updateHouseVisual();
+
+  showToast(targetState ? 'Iluminação Ligada: Casa Colorida!' : 'Iluminação Apagada: Casa em Cinza');
+
+  try {
+    for (const d of lightDevices) {
+      await fetch(`/api/device/${d.id}/toggle`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+    }
+  } catch (err) {
+    console.error('Erro ao alternar iluminação:', err);
+  }
+}
+
+// Disparar ação da porteira a partir do pino na planta 3D
+function triggerPorteiraPulse() {
+  const gateBtn = document.getElementById('actionGate');
+  if (gateBtn) {
+    gateBtn.click();
+  }
+}
+
 // Fetch Devices
 async function loadDevices() {
   const token = localStorage.getItem('benedito_token');
@@ -145,6 +236,7 @@ async function loadDevices() {
       totalCountEl.textContent = devices.length;
       renderDevices();
       updateQuickActionStates();
+      updateHouseVisual();
     }
   } catch (err) {
     console.error('Erro ao carregar dispositivos:', err);
@@ -215,6 +307,7 @@ async function toggleDevice(id) {
   dev.state = !dev.state;
   renderDevices();
   updateQuickActionStates();
+  updateHouseVisual();
 
   showToast(`${dev.name}: ${dev.state ? 'Ligando...' : 'Desligando...'}`);
 
@@ -228,6 +321,7 @@ async function toggleDevice(id) {
       Object.assign(dev, result.device);
       renderDevices();
       updateQuickActionStates();
+      updateHouseVisual();
     }
   } catch (err) {
     console.error('Falha ao enviar comando:', err);
@@ -288,6 +382,7 @@ document.getElementById('actionGate').addEventListener('click', async () => {
   if (porteira) {
     porteira.state = true;
     renderDevices();
+    updateHouseVisual();
   }
 
   try {
@@ -305,6 +400,7 @@ document.getElementById('actionGate').addEventListener('click', async () => {
       if (porteira) porteira.state = false;
       gateSub.textContent = 'Fechada';
       renderDevices();
+      updateHouseVisual();
     }, 4000);
   }, 1000);
 });
@@ -331,6 +427,7 @@ document.getElementById('actionAllOff').addEventListener('click', async () => {
   });
   renderDevices();
   updateQuickActionStates();
+  updateHouseVisual();
   showToast('Modo Dormir: Todas as luzes desligadas');
 
   try {
@@ -350,6 +447,16 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     renderDevices();
   });
 });
+
+// Clique na planta 3D da casa para alternar entre Cinza e Colorido
+const houseCardEl = document.getElementById('houseCard');
+if (houseCardEl) {
+  houseCardEl.addEventListener('click', (e) => {
+    if (!e.target.closest('.hotspot') && !e.target.closest('.house-floating-banner')) {
+      toggleAllLighting();
+    }
+  });
+}
 
 // Fullscreen
 document.getElementById('btnFullscreen').addEventListener('click', () => {
